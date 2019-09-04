@@ -88,7 +88,25 @@ nse_expr_to_list_expr.call <- function(j) {
 }
 
 nse_expr_to_list_expr.formula <- function(j) {
-  attr(terms(j), "variables")
+  list_j <- attr(terms(j), "variables")
+  
+  # hamdle adjust() expressions ------------------------------------------------
+  # e.g. adjust(a, b) -> list(adjust(a), adjust(b))
+  exprs <- as.list(list_j)[-1]
+  is_adjust_expr <- vapply(exprs, function(expr) {
+    identical(as.list(expr)[[1]], quote(adjust))
+  }, logical(1))
+  exprs[is_adjust_expr] <- lapply(exprs[is_adjust_expr], function(expr) {
+    sub_expr_list <- as.list(expr)[-1]
+    sub_expr_list <- lapply(sub_expr_list, function(sub_expr) {
+      substitute(adjust(SUB_EXPR), list(SUB_EXPR = sub_expr))
+    })
+    sub_expr_list
+  })
+  exprs <- unlist(exprs)
+  list_j <- do.call(call, c(name = "list", exprs), quote = TRUE)
+  
+  list_j
 }
 
 nse_eval <- function(
@@ -189,6 +207,15 @@ nse_eval <- function(
         j = dt_col_nms,
         value = dt
       )
+    } else if (data.table::is.data.table(eval_result[[col_nm]])) {
+      dt <- eval_result[[col_nm]]
+      print(dt)
+      dt_col_nms <- names(dt)
+      data.table::set(
+        x = output,
+        j = dt_col_nms,
+        value = dt
+      )
     } else {
       data.table::set(
         x = output,
@@ -214,6 +241,16 @@ nse_eval <- function(
       nse_eval_attrs[["formula_j_lhs"]] <- NULL
       nse_eval_attrs[["formula_j_rhs"]] <- j_elems[[2]]
     }
+    
+    all_elems <- as.list(list_j)[-1]
+    rhs_elems <- if (has_lhs) all_elems[-1] else all_elems
+    is_adjust_elem <- vapply(rhs_elems, function(expr) {
+      identical(as.list(expr)[[1]], quote(adjust))
+    }, logical(1))
+    nse_eval_attrs[["formula_j_rhs_stratum_elems"]]  <- rhs_elems[
+      !is_adjust_elem
+      ]
+    nse_eval_attrs[["formula_j_rhs_adjust_elems"]]  <- rhs_elems[is_adjust_elem]
   }
   lapply(eval_result, function(result_elem) {
     if (inherits(result_elem, "surv_dt")) {
@@ -227,6 +264,20 @@ nse_eval <- function(
   )
   output
 }
+
+
+
+
+full_call_args <- function() {
+  user_call <- eval(quote(match.call()), parent.frame(1))
+  user_call_fun_nm <- deparse(as.list(user_call)[[1]])
+  user_call_args <- as.list(user_call)[-1]
+  full_call_args <- formals(fun = user_call_fun_nm)
+  full_call_args[names(user_call_args)] <- user_call_args
+  full_call_args
+}
+
+
 
 
 

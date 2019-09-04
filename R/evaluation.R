@@ -812,19 +812,24 @@ usePopFormula <- function(form = NULL, adjust = NULL, data = data.frame(),
 #' 
 #' y ~ x + adjust(z)
 #' @export
+#' @importFrom data.table setDT
 adjust <- function(...) {
   
-  call <- sys.call(1L)
-  call <- as.list(call)[1L]
+  call_where_used <- as.list(sys.call(1L))[1L]
 
-  if (deparse(call) %in% c("adjust", "list(adjust)")) {
+  if (deparse(call_where_used) %in% c("adjust", "list(adjust)")) {
     stop("Function adjust() only intended to be used within the formulas of ",
          "certain functions of package popEpi. See e.g. ?survtab_ag for usage.")
   }
   
-  mc <- as.list(match.call())[-1L]
-  if (is.list(mc) && length(mc) == 1) mc <- mc[[1]]
-  mc
+  ddd <- list(...)
+  if (length(ddd) != 1) {
+    stop("internal error: number of items evaluated by adjust() not equal ",
+         "to one. complain to the package maintainer if you see this --- ",
+         "meanwhile you might try an adjust argument in the function you are ",
+         "using instead of using adjust() in a formula")
+  }
+  ddd[[1L]]
 }
 
 
